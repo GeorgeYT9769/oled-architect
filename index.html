@@ -823,6 +823,9 @@
                 const d = c.getContext('2d').getImageData(0,0,s,s).data, p = new Array(s*s).fill(0);
                 for(let j=0; j<p.length; j++) if(d[j*4+3]>50) p[j]=1;
                 activeObject = { x: Math.floor((config.width-s)/2), y: Math.floor((config.height-s)/2), w: s, h: s, pixels: p, originalPixels: [...p], origW: s, origH: s, type: 'bitmap' };
+                currentTool = 'rect'; // Switch to object mode
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('.tool-btn[data-tool="rect"]').classList.add('active');
                 closeModal('libraryModal'); render(); showToast("Icon loaded");
             };
             i.src = 'data:image/svg+xml;base64,' + btoa(svg);
