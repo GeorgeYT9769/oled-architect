@@ -5,6 +5,8 @@ The **OLED Pixel Architect** is a single-file, responsive web application design
 
 It provides an intuitive pixel-level editing experience with real-time code generation for Arduino (C/C++) and MicroPython/CircuitPython framebuf libraries.
 
+![Screenshot](https://github.com/GeorgeYT9769/oled-architect/blob/main/screenshot.png?raw=true)
+
 ✨ Features
 ----------
 
