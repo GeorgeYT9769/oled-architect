@@ -207,9 +207,21 @@
 
             <div class="flex items-center gap-6">
                 <!-- Zoom -->
-                <div class="flex items-center gap-2">
-                    <i data-lucide="zoom-in" class="w-4 h-4 text-gray-500"></i>
-                    <input type="range" id="zoomSlider" min="1" max="30" value="10" class="w-24">
+                <div class="flex flex-col items-start gap-1">
+                    <span class="text-xs text-gray-400 font-mono">Zoom</span>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="zoom-in" class="w-4 h-4 text-gray-500"></i>
+                        <input type="range" id="zoomSlider" min="1" max="30" value="10" class="w-24">
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-start gap-1">
+                    <span class="text-xs text-gray-400 font-mono">Brush/Eraser Size</span>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="move-diagonal" class="w-4 h-4 text-gray-500"></i>
+                        <input type="range" id="brushSizeSlider" min="1" max="10" value="1" class="w-16">
+                        <span id="brushSizeValue" class="text-xs text-gray-300 font-mono ml-1">1 px</span>
+                    </div>
                 </div>
 
                 <div class="h-6 w-px bg-white/10"></div>
@@ -291,12 +303,15 @@
                 <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="triangle" title="Triangle (T)">
                     <i data-lucide="triangle" class="w-5 h-5"></i>
                 </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="text" title="Text (T)">
+                    <i data-lucide="type" class="w-5 h-5"></i>
+                </button>
             </div>
 
             <div class="w-8 h-px bg-white/10"></div>
 
             <div>
-                 <button onclick="openModal('libraryModal')" class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent" title="Icon Library">
+                 <button onclick="openModal('libraryModal')" class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors" title="Icon Library">
                     <i data-lucide="library" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -321,6 +336,7 @@
             <div class="flex-1 overflow-auto flex items-center justify-center p-8 custom-scrollbar relative" id="canvasContainer">
                 <div class="relative shadow-2xl shadow-white/5 rounded-sm border border-white/5 group">
                     <canvas id="drawingCanvas" class="block bg-oled-off"></canvas>
+                    <canvas id="cursorCanvas" class="absolute top-0 left-0 pointer-events-none"></canvas>
                     <div class="absolute inset-0 pointer-events-none border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity" id="gridOverlay"></div>
                 </div>
             </div>
@@ -336,7 +352,7 @@
                 </div>
                 
                 <div id="objectControls" class="hidden flex gap-2">
-                    <button onclick="rotateActiveObject()" class="hover:text-white" title="Rotate (R)">
+                    <button onclick="rotateActiveObject()" class="hover:text-white" title="Rotate 90° (R)">
                         <i data-lucide="rotate-cw" class="w-3 h-3"></i>
                     </button>
                     <button onclick="commitActiveObject()" class="hover:text-green-400" title="Confirm (Enter)">
@@ -344,6 +360,9 @@
                     </button>
                     <button onclick="discardActiveObject()" class="hover:text-red-400" title="Cancel (Esc)">
                         <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                    <button onclick="deleteActiveObject()" class="hover:text-red-400" title="Delete Selection (Del)">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i>
                     </button>
                 </div>
             </div>
@@ -472,6 +491,23 @@
         </div>
     </div>
 
+    <!-- Text Modal -->
+    <div id="textModal" class="modal-bg fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="modal-content w-full max-w-xs bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-white font-semibold flex items-center gap-2"><i data-lucide="type" class="w-4 h-4"></i> Add Text</h3>
+                <button onclick="closeModal('textModal')" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 flex-1 overflow-auto">
+                <input id="textInput" type="text" class="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-white/30 focus:outline-none" placeholder="Enter text...">
+            </div>
+            <div class="p-4 border-t border-white/10 bg-white/5 flex justify-end gap-3">
+                <button onclick="closeModal('textModal')" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+                <button onclick="addTextObject()" class="px-4 py-2 rounded-lg text-sm bg-white text-black font-semibold hover:bg-gray-200 transition-colors">Add</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="fixed bottom-6 right-6 bg-white text-black px-4 py-2 rounded shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 font-medium text-sm">
         <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
         <span>Action Successful</span>
@@ -480,6 +516,7 @@
     <script>
         const config = { width: 128, height: 64, pixelScale: 10, gridColor: '#262626', pixelOnColor: '#ffffff', pixelOffColor: '#1a1a1a', highlightColor: '#00eaff' };
         let currentTool = 'pencil';
+        let brushSize = 1;
         let isDrawing = false, isCreatingObject = false;
         let pixelData = [], referencePixels = [], history = [];
         let startPos = { x: 0, y: 0 };
@@ -514,6 +551,12 @@
             canvas.height = config.height * config.pixelScale;
             canvas.style.width = `${config.width * config.pixelScale}px`;
             canvas.style.height = `${config.height * config.pixelScale}px`;
+            const cursorCanvas = document.getElementById('cursorCanvas');
+            cursorCanvas.width = canvas.width;
+            cursorCanvas.height = canvas.height;
+            cursorCanvas.style.width = canvas.style.width;
+            cursorCanvas.style.height = canvas.style.height;
+            cursorCanvas.style.zIndex = 10;
             render();
             checkMockupAvailability();
         }
@@ -542,7 +585,7 @@
 
         function render() {
             ctx.fillStyle = config.pixelOffColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+
             // Reference Layer
             if (referencePixels.length === pixelData.length) {
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
@@ -563,26 +606,84 @@
 
             if (activeObject) {
                 objModeIndicator.classList.remove('hidden'); objControls.classList.remove('hidden');
+                ctx.save();
+                // Calculate center of object
+                const cx = (activeObject.x + activeObject.w / 2) * config.pixelScale;
+                const cy = (activeObject.y + activeObject.h / 2) * config.pixelScale;
+                ctx.translate(cx, cy);
+                ctx.rotate((activeObject.rotation || 0) * Math.PI / 180);
+                ctx.translate(-cx, -cy);
+
                 ctx.fillStyle = config.pixelOnColor;
                 for (let y = 0; y < activeObject.h; y++) {
                     for (let x = 0; x < activeObject.w; x++) {
                         if (activeObject.pixels[y * activeObject.w + x] === 1) {
-                            const cx = activeObject.x + x, cy = activeObject.y + y;
-                            if (cx >= 0 && cx < config.width && cy >= 0 && cy < config.height) {
-                                ctx.globalAlpha = 0.8; ctx.fillRect(cx * config.pixelScale + 1, cy * config.pixelScale + 1, config.pixelScale - 2, config.pixelScale - 2); ctx.globalAlpha = 1.0;
+                            const px = activeObject.x + x, py = activeObject.y + y;
+                            if (px >= 0 && px < config.width && py >= 0 && py < config.height) {
+                                ctx.globalAlpha = 0.8; ctx.fillRect(px * config.pixelScale + 1, py * config.pixelScale + 1, config.pixelScale - 2, config.pixelScale - 2); ctx.globalAlpha = 1.0;
                             }
                         }
                     }
                 }
+                ctx.restore();
+
                 if (!isDrawing) {
                     const bx = activeObject.x * config.pixelScale, by = activeObject.y * config.pixelScale, bw = activeObject.w * config.pixelScale, bh = activeObject.h * config.pixelScale;
                     ctx.strokeStyle = config.highlightColor; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.strokeRect(bx, by, bw, bh); ctx.setLineDash([]);
-                    ctx.fillStyle = config.highlightColor; ctx.fillRect(bx + bw - 4, by + bh - 4, 8, 8);
+
+                    // --- Draw Delete and Rotate Icons on Top of Selection ---
+                    const iconSize = 24;
+                    const padding = 4;
+                    const topX = bx + bw - iconSize - padding;
+                    const topY = by - iconSize - padding;
+
+                    // Draw spinning arrow icon (left)
+                    drawSvgIcon(ctx, topX, topY, iconSize, 'M12 2a10 10 0 1 1-7.07 2.93l1.41-1.41M12 2v6', config.highlightColor);
+                    // Draw delete icon (right)
+                    drawSvgIcon(ctx, topX + iconSize + padding, topY, iconSize, 'M3 6h18M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6m-6 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2', '#ff4c4c');
+
+                    window._objectIcons = [
+                        {type: 'rotate', x: topX, y: topY, size: iconSize},
+                        {type: 'delete', x: topX + iconSize + padding, y: topY, size: iconSize}
+                    ];
                 }
             } else {
                 objModeIndicator.classList.add('hidden'); objControls.classList.add('hidden');
+                window._objectIcons = [];
             }
         }
+
+        // Helper to draw SVG path as icon
+        function drawSvgIcon(ctx, x, y, size, path, color) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const scale = size / 24;
+            const p = new Path2D(path);
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            ctx.stroke(p);
+            ctx.restore();
+        }
+
+        // --- Add click detection for icons ---
+        canvas.addEventListener('mousedown', function(e) {
+            // Icon click detection
+            if (activeObject && window._objectIcons && window._objectIcons.length) {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                for (const icon of window._objectIcons) {
+                    if (mx >= icon.x && mx <= icon.x + icon.size && my >= icon.y && my <= icon.y + icon.size) {
+                        if (icon.type === 'rotate') { rotateActiveObject(); return; }
+                        if (icon.type === 'delete') { deleteActiveObject(); return; }
+                    }
+                }
+            }
+            // Otherwise, normal drawing
+            handleStart(e);
+        });
 
         function getMousePos(evt) {
             const rect = canvas.getBoundingClientRect();
@@ -600,8 +701,8 @@
             if (!isDraggingObject && !isResizingObject) {
                 isDrawing = true; startPos = pos;
                 if (['pencil', 'eraser', 'bucket'].includes(currentTool)) saveHistory(); else activeObject = null;
-                if (currentTool === 'pencil') { setPixel(pos.x, pos.y, 1); render(); }
-                else if (currentTool === 'eraser') { setPixel(pos.x, pos.y, 0); render(); }
+                if (currentTool === 'pencil') { drawBrush(pos.x, pos.y, 1); render(); }
+                else if (currentTool === 'eraser') { drawBrush(pos.x, pos.y, 0); render(); }
                 else if (currentTool === 'bucket') { floodFill(pos.x, pos.y, 1); render(); updateCodeOutput(); }
             }
         }
@@ -644,8 +745,8 @@
             targetX = Math.max(0, Math.min(targetX, config.width - 1)); targetY = Math.max(0, Math.min(targetY, config.height - 1));
 
             if (isShape) { activeObject = generateShapeObject(startPos, {x: targetX, y: targetY}, currentTool, fillCheckbox.checked); render(); return; }
-            if (currentTool === 'pencil') { drawLine(startPos.x, startPos.y, targetX, targetY, 1); startPos = {x: targetX, y: targetY}; render(); }
-            else if (currentTool === 'eraser') { drawLine(startPos.x, startPos.y, targetX, targetY, 0); startPos = {x: targetX, y: targetY}; render(); }
+            if (currentTool === 'pencil') { drawLineBrush(startPos.x, startPos.y, targetX, targetY, 1); startPos = {x: targetX, y: targetY}; render(); }
+            else if (currentTool === 'eraser') { drawLineBrush(startPos.x, startPos.y, targetX, targetY, 0); startPos = {x: targetX, y: targetY}; render(); }
         }
 
         function handleEnd(e) {
@@ -670,7 +771,7 @@
             else if (tool === 'circle') drawCircleBuf(ls.x, ls.y, le.x, le.y, 1, fill, set);
             else if (tool === 'triangle') drawTriangleBuf(ls.x, ls.y, le.x, le.y, 1, fill, set);
             
-            return { x, y, w, h, pixels: temp, originalPixels: [...temp], origW: w, origH: h, type: tool, fill };
+            return { x, y, w, h, pixels: temp, originalPixels: [...temp], origW: w, origH: h, type: tool, fill, rotation: 0 };
         }
 
         function commitActiveObject() {
@@ -682,6 +783,12 @@
                 }
             }
             activeObject = null; render(); updateCodeOutput(); showToast("Object Created");
+        }
+
+        function deleteActiveObject() {
+            activeObject = null;
+            render();
+            showToast("Selection deleted");
         }
 
         function rotateActiveObject() {
@@ -747,6 +854,26 @@
             const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), b = Math.max(y0, y1);
             const v1 = {x: Math.floor((l+r)/2), y: t}, v2 = {x: l, y: b}, v3 = {x: r, y: b};
             drawLineBuf(v1.x, v1.y, v2.x, v2.y, val, set); drawLineBuf(v2.x, v2.y, v3.x, v3.y, val, set); drawLineBuf(v3.x, v3.y, v1.x, v1.y, val, set);
+            if (fill) {
+                // Scanline fill
+                for (let y = t; y <= b; y++) {
+                    let nodes = [];
+                    [[v1, v2], [v2, v3], [v3, v1]].forEach(([a, b]) => {
+                        if (a.y === b.y) return;
+                        let [ay, by] = [a.y, b.y], [ax, bx] = [a.x, b.x];
+                        if (ay > by) { [ay, by] = [by, ay]; [ax, bx] = [bx, ax]; }
+                        if (y >= ay && y < by) {
+                            nodes.push(Math.round(ax + (bx - ax) * (y - ay) / (by - ay)));
+                        }
+                    });
+                    nodes.sort((a, b) => a - b);
+                    for (let i = 0; i < nodes.length; i += 2) {
+                        if (nodes[i + 1] !== undefined) {
+                            for (let x = nodes[i]; x <= nodes[i + 1]; x++) set(x, y, val);
+                        }
+                    }
+                }
+            }
         }
 
         function setPixel(x, y, val) { if (x >= 0 && x < config.width && y >= 0 && y < config.height) pixelData[y * config.width + x] = val; }
@@ -806,7 +933,6 @@
             document.getElementById('pythonCode').textContent = `import framebuf\nbuf = bytearray(b'${hex}')\nfb = framebuf.FrameBuffer(buf, ${config.width}, ${config.height}, framebuf.MONO_HLSB)`;
         }
         function discardActiveObject() { activeObject = null; render(); }
-        function rotateActiveObject() { rotateActiveObject(); } // Fixed binding above
         
         function loadLibraryIcons() {
             const g = document.getElementById('iconGrid'); Object.keys(lucide.icons).forEach(n => {
@@ -822,13 +948,50 @@
                 const c = document.createElement('canvas'); c.width = s; c.height = s; c.getContext('2d').drawImage(i, 0, 0);
                 const d = c.getContext('2d').getImageData(0,0,s,s).data, p = new Array(s*s).fill(0);
                 for(let j=0; j<p.length; j++) if(d[j*4+3]>50) p[j]=1;
-                activeObject = { x: Math.floor((config.width-s)/2), y: Math.floor((config.height-s)/2), w: s, h: s, pixels: p, originalPixels: [...p], origW: s, origH: s, type: 'bitmap' };
+                activeObject = { 
+                    x: Math.floor((config.width-s)/2), 
+                    y: Math.floor((config.height-s)/2), 
+                    w: s, h: s, 
+                    pixels: p, 
+                    originalPixels: [...p], 
+                    origW: s, origH: s, 
+                    type: 'bitmap',
+                    rotation: 0
+                };
                 currentTool = 'rect'; // Switch to object mode
                 document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                 document.querySelector('.tool-btn[data-tool="rect"]').classList.add('active');
                 closeModal('libraryModal'); render(); showToast("Icon loaded");
             };
             i.src = 'data:image/svg+xml;base64,' + btoa(svg);
+        }
+        function filterIcons(query) {
+            const grid = document.getElementById('iconGrid');
+            Array.from(grid.children).forEach(d => {
+                const name = d.dataset.name.toLowerCase();
+                d.style.display = name.includes(query) ? '' : 'none';
+            });
+        }
+        function drawCursor(x, y) {
+            const cursorCanvas = document.getElementById('cursorCanvas');
+            const cctx = cursorCanvas.getContext('2d');
+            cctx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+            if (!['pencil', 'eraser'].includes(currentTool)) return;
+            const r = Math.floor(brushSize / 2);
+            cctx.save();
+            cctx.globalAlpha = 0.5;
+            cctx.fillStyle = '#00eaff';
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if ((dx * dx + dy * dy) <= r * r) {
+                        const px = x + dx, py = y + dy;
+                        if (px >= 0 && px < config.width && py >= 0 && py < config.height) {
+                            cctx.fillRect(px * config.pixelScale, py * config.pixelScale, config.pixelScale, config.pixelScale);
+                        }
+                    }
+                }
+            }
+            cctx.restore();
         }
         function importCode(ref) {
             const val = document.getElementById(ref ? 'referenceInput' : 'importInput').value;
@@ -847,12 +1010,53 @@
             else { if(activeObject) commitActiveObject(); activeObject = { x:0, y:0, w, h, pixels: p, originalPixels: [...p], origW: w, origH: h, type: 'bitmap' }; closeModal('importModal'); showToast("Imported"); }
             render();
         }
-
+        function addTextObject() {
+            const txt = document.getElementById('textInput').value;
+            if (!txt) return;
+            // Simple bitmap text rendering (monospace, 6x8 per char)
+            const charW = 6, charH = 8;
+            const w = Math.min(config.width, txt.length * charW), h = charH;
+            const p = new Array(w * h).fill(0);
+            // Basic font: use ctx to draw text to canvas and extract pixels
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w; tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = '#fff';
+            tempCtx.font = '8px "JetBrains Mono", monospace'; // Use JetBrains Mono for thinner text
+            tempCtx.textBaseline = 'top';
+            tempCtx.fillText(txt, 0, 0);
+            const imgData = tempCtx.getImageData(0, 0, w, h).data;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (imgData[(y * w + x) * 4 + 3] > 50) p[y * w + x] = 1;
+                }
+            }
+            activeObject = { 
+                x: Math.floor((config.width - w) / 2), 
+                y: Math.floor((config.height - h) / 2), 
+                w, h, 
+                pixels: p, 
+                originalPixels: [...p], 
+                origW: w, origH: h, 
+                type: 'bitmap',
+                rotation: 0
+            };
+            currentTool = 'rect';
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.tool-btn[data-tool="rect"]').classList.add('active');
+            closeModal('textModal');
+            render();
+            showToast("Text loaded");
+        }
         // --- Event Listeners Setup ---
         function setupEventListeners() {
             document.getElementById('resizeBtn').addEventListener('click', handleResizeBtn);
             zoomSlider.addEventListener('input', handleZoom);
-
+            document.getElementById('brushSizeSlider').addEventListener('input', (e) => {
+                brushSize = parseInt(e.target.value);
+                document.getElementById('brushSizeValue').textContent = `${brushSize} px`;
+            });
+            document.getElementById('brushSizeValue').textContent = `${brushSize} px`;
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     // Commit any active object before switching tools if it's a destructive tool
@@ -864,6 +1068,11 @@
                     });
                     btn.classList.add('active');
                     currentTool = btn.dataset.tool;
+
+                    if (currentTool === 'text') {
+                        openModal('textModal');
+                        return;
+                    }
                     
                     // If switching to a shape tool, clear existing active object for fresh start
                     if (['line', 'rect', 'circle', 'triangle'].includes(currentTool)) {
@@ -887,8 +1096,32 @@
                 });
             });
 
-            canvas.addEventListener('mousedown', (e) => handleStart(e));
-            canvas.addEventListener('mousemove', (e) => handleMove(e));
+            canvas.addEventListener('mousedown', function(e) {
+                // Icon click detection
+                if (activeObject && window._objectIcons && window._objectIcons.length) {
+                    const rect = canvas.getBoundingClientRect();
+                    const mx = e.clientX - rect.left;
+                    const my = e.clientY - rect.top;
+                    for (const icon of window._objectIcons) {
+                        if (mx >= icon.x && mx <= icon.x + icon.size && my >= icon.y && my <= icon.y + icon.size) {
+                            if (icon.type === 'rotate') { rotateActiveObject(); return; }
+                            if (icon.type === 'delete') { deleteActiveObject(); return; }
+                        }
+                    }
+                }
+                // Otherwise, normal drawing
+                handleStart(e);
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                handleMove(e);
+                const pos = getMousePos(e);
+                drawCursor(pos.x, pos.y);
+            });
+            canvas.addEventListener('mouseleave', () => {
+                const cursorCanvas = document.getElementById('cursorCanvas');
+                cursorCanvas.getContext('2d').clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+            });
             window.addEventListener('mouseup', (e) => handleEnd(e));
             
             document.addEventListener('keydown', (e) => {
@@ -899,11 +1132,11 @@
                 if (activeObject) {
                     if (e.key === 'Enter') commitActiveObject();
                     if (e.key === 'Escape') discardActiveObject();
-                    if (e.key === 'r' || e.key === 'R') rotateActiveObject();
                     if (e.key === 'ArrowRight') { activeObject.x = Math.min(activeObject.x + 1, config.width - activeObject.w); render(); e.preventDefault(); }
                     if (e.key === 'ArrowLeft') { activeObject.x = Math.max(activeObject.x - 1, 0); render(); e.preventDefault(); }
                     if (e.key === 'ArrowUp') { activeObject.y = Math.max(activeObject.y - 1, 0); render(); e.preventDefault(); }
                     if (e.key === 'ArrowDown') { activeObject.y = Math.min(activeObject.y + 1, config.height - activeObject.h); render(); e.preventDefault(); }
+                    if (e.key === 'Delete') { deleteActiveObject(); }
                 }
             });
             document.addEventListener('keyup', (e) => {
@@ -911,6 +1144,31 @@
             });
 
             document.getElementById('iconSearch').addEventListener('input', (e) => filterIcons(e.target.value.toLowerCase()));
+        }
+
+        // --- Brush & Eraser Drawing Functions ---
+        function drawBrush(x, y, val) {
+            const r = Math.floor(brushSize / 2);
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if ((dx * dx + dy * dy) <= r * r) { // Circle brush
+                        if (x + dx >= 0 && x + dx < config.width && y + dy >= 0 && y + dy < config.height) {
+                            setPixel(x + dx, y + dy, val);
+                        }
+                    }
+                }
+            }
+        }
+        function drawLineBrush(x0, y0, x1, y1, val) {
+            let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1, err = dx - dy;
+
+            while (true) {
+                drawBrush(x0, y0, val);
+                if (x0 === x1 && y0 === y1) break;
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x0 += sx; }
+                if (e2 < dx) { err += dx; y0 += sy; }
+            }
         }
 
         window.onload = init;
