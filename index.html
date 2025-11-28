@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OLED Pixel Architect</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        oled: {
+                            bg: '#0a0a0a',
+                            on: '#ffffff',
+                            off: '#1a1a1a',
+                            grid: '#262626',
+                            highlight: '#00eaff',
+                            ref: 'rgba(255, 255, 255, 0.15)' // Dim white for reference
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(100, 100, 100, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #e5e5e5;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .tool-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tool-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+        .tool-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+        }
+
+        /* Modal Transitions */
+        .modal-bg {
+            transition: opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-bg.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: scale(0.95) translateY(10px);
+        }
+        .modal-bg.open .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        /* Toggle Checkbox */
+        .toggle-checkbox:checked {
+            background-color: #ffffff;
+            border-color: #ffffff;
+        }
+        .toggle-checkbox:checked + div {
+            transform: translateX(100%);
+            background-color: #000;
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -5px; 
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        canvas {
+            image-rendering: pixelated; 
+            cursor: crosshair;
+        }
+
+        /* OLED Mockup CSS */
+        .oled-pcb {
+            background-color: #004a8f; 
+            border-radius: 4px;
+            padding: 15px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            position: relative;
+            width: 320px;
+            height: 320px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .oled-holes .hole {
+            width: 12px; height: 12px;
+            background: #050505;
+            border: 2px solid #c0c0c0;
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .oled-screen-frame {
+            background: #111;
+            border: 1px solid #333;
+            padding: 4px;
+            margin-top: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .oled-glass {
+            background: #000;
+            width: 256px; 
+            height: 128px; 
+            position: relative;
+            overflow: hidden;
+        }
+        .oled-pins {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+        .oled-pin {
+            width: 4px; height: 12px;
+            background: silver;
+            border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-sm select-none">
+
+    <!-- Header -->
+    <header class="glass-panel border-b border-white/10 h-16 flex-none z-20 relative">
+        <div class="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center shadow-lg shadow-white/5">
+                    <i data-lucide="grid-3x3" class="w-5 h-5 text-white"></i>
+                </div>
+                <h1 class="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                    OLED Architect
+                </h1>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <!-- Zoom -->
+                <div class="flex items-center gap-2">
+                    <i data-lucide="zoom-in" class="w-4 h-4 text-gray-500"></i>
+                    <input type="range" id="zoomSlider" min="1" max="30" value="10" class="w-24">
+                </div>
+
+                <div class="h-6 w-px bg-white/10"></div>
+
+                <!-- Resize -->
+                <div class="flex items-center gap-2 bg-black/30 rounded-lg p-1 border border-white/5">
+                    <div class="flex items-center gap-1 px-2">
+                        <span class="text-xs text-gray-500 font-mono">W:</span>
+                        <input type="number" id="canvasWidth" value="128" class="bg-transparent w-12 text-center font-mono focus:outline-none text-white" min="1">
+                    </div>
+                    <div class="w-px h-4 bg-white/10"></div>
+                    <div class="flex items-center gap-1 px-2">
+                        <span class="text-xs text-gray-500 font-mono">H:</span>
+                        <input type="number" id="canvasHeight" value="64" class="bg-transparent w-12 text-center font-mono focus:outline-none text-white" min="1">
+                    </div>
+                    <button id="resizeBtn" class="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors border border-white/5">
+                        Resize
+                    </button>
+                </div>
+                
+                <div class="h-6 w-px bg-white/10"></div>
+
+                <!-- Tools -->
+                <button id="mockupBtn" onclick="openModal('mockupModal')" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors hidden">
+                    <i data-lucide="monitor" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Mockup</span>
+                </button>
+
+                <button onclick="openModal('referenceModal')" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors" title="Load Reference Image under canvas">
+                    <i data-lucide="layers" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Ref</span>
+                </button>
+
+                <button onclick="openModal('importModal')" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="file-code-2" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Import</span>
+                </button>
+                <button onclick="clearCanvas()" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Clear</span>
+                </button>
+                <button onclick="invertCanvas()" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Invert</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Toolbar -->
+        <aside class="w-16 flex-none glass-panel border-r border-white/5 flex flex-col items-center py-6 gap-4 z-10 overflow-y-auto custom-scrollbar">
+            <div class="space-y-2">
+                <button class="tool-btn active w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="pencil" title="Pencil (P)">
+                    <i data-lucide="pencil" class="w-5 h-5"></i>
+                </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="eraser" title="Eraser (E)">
+                    <i data-lucide="eraser" class="w-5 h-5"></i>
+                </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="bucket" title="Fill Bucket (B)">
+                    <i data-lucide="paint-bucket" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="w-8 h-px bg-white/10"></div>
+            
+            <div class="space-y-2">
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="line" title="Line (L)">
+                    <i data-lucide="minus" class="w-5 h-5"></i>
+                </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="rect" title="Rectangle (R)">
+                    <i data-lucide="square" class="w-5 h-5"></i>
+                </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="circle" title="Circle (C)">
+                    <i data-lucide="circle" class="w-5 h-5"></i>
+                </button>
+                <button class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center border border-transparent" data-tool="triangle" title="Triangle (T)">
+                    <i data-lucide="triangle" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="w-8 h-px bg-white/10"></div>
+
+            <div>
+                 <button onclick="openModal('libraryModal')" class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent" title="Icon Library">
+                    <i data-lucide="library" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex flex-col items-center gap-1 mt-2">
+                <span class="text-[10px] text-gray-500 font-mono uppercase">Fill</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="fillToggle" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white/20"></div>
+                </label>
+            </div>
+
+            <div class="mt-auto flex flex-col gap-2">
+                <button onclick="undo()" class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors" title="Undo (Ctrl+Z)">
+                    <i data-lucide="undo-2" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <section class="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
+            <div class="flex-1 overflow-auto flex items-center justify-center p-8 custom-scrollbar relative" id="canvasContainer">
+                <div class="relative shadow-2xl shadow-white/5 rounded-sm border border-white/5 group">
+                    <canvas id="drawingCanvas" class="block bg-oled-off"></canvas>
+                    <div class="absolute inset-0 pointer-events-none border border-white/5 opacity-0 group-hover:opacity-100 transition-opacity" id="gridOverlay"></div>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="h-8 glass-panel border-y border-white/5 flex items-center px-4 justify-between text-xs text-gray-500 font-mono flex-none">
+                <div class="flex gap-4 items-center">
+                    <div id="coords">X: 0 Y: 0</div>
+                    <div id="shiftIndicator" class="hidden text-white font-bold opacity-70">SHIFT: Constrained</div>
+                    <div id="objectModeIndicator" class="hidden text-oled-highlight font-bold animate-pulse flex items-center gap-2">
+                        <i data-lucide="move" class="w-3 h-3"></i> Move/Resize Mode (Enter to Confirm)
+                    </div>
+                </div>
+                
+                <div id="objectControls" class="hidden flex gap-2">
+                    <button onclick="rotateActiveObject()" class="hover:text-white" title="Rotate (R)">
+                        <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+                    </button>
+                    <button onclick="commitActiveObject()" class="hover:text-green-400" title="Confirm (Enter)">
+                        <i data-lucide="check" class="w-3 h-3"></i>
+                    </button>
+                    <button onclick="discardActiveObject()" class="hover:text-red-400" title="Cancel (Esc)">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Code Output -->
+            <div class="h-64 glass-panel flex flex-col z-10 flex-none" id="codePanel">
+                <div class="flex items-center px-2 pt-2 gap-1 border-b border-white/5 bg-black/20">
+                    <button class="tab-btn px-4 py-2 text-sm font-medium text-oled-on border-b-2 border-oled-on transition-colors" data-tab="arduino">Arduino</button>
+                    <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-white transition-colors" data-tab="python">MicroPython</button>
+                </div>
+
+                <div class="flex-1 overflow-hidden relative">
+                    <div id="tab-arduino" class="tab-content h-full p-4 overflow-auto custom-scrollbar">
+                        <div class="flex justify-between items-center mb-2 sticky top-0 bg-[#0a0a0a] pb-2 border-b border-white/5">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider font-bold">Bitmap Output</span>
+                            <button class="text-xs flex items-center gap-1 text-white hover:text-gray-300 bg-white/5 px-2 py-1 rounded border border-white/10" onclick="copyCode('arduinoCode')">
+                                <i data-lucide="copy" class="w-3 h-3"></i> Copy
+                            </button>
+                        </div>
+                        <pre class="text-xs font-mono text-gray-300 whitespace-pre-wrap select-all" id="arduinoCode"></pre>
+                    </div>
+
+                    <div id="tab-python" class="tab-content h-full p-4 overflow-auto custom-scrollbar hidden">
+                        <div class="flex justify-between items-center mb-2 sticky top-0 bg-[#0a0a0a] pb-2 border-b border-white/5">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider font-bold">Framebuf Output</span>
+                            <button class="text-xs flex items-center gap-1 text-white hover:text-gray-300 bg-white/5 px-2 py-1 rounded border border-white/10" onclick="copyCode('pythonCode')">
+                                <i data-lucide="copy" class="w-3 h-3"></i> Copy
+                            </button>
+                        </div>
+                        <pre class="text-xs font-mono text-gray-300 whitespace-pre-wrap select-all" id="pythonCode"></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Mockup Modal -->
+    <div id="mockupModal" class="modal-bg fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div class="flex flex-col items-center">
+            <h3 class="text-white text-lg font-bold mb-4">Device Mockup (128x64)</h3>
+            <div class="oled-pcb">
+                <div class="oled-holes">
+                    <div class="hole" style="top: 8px; left: 8px;"></div>
+                    <div class="hole" style="top: 8px; right: 8px;"></div>
+                    <div class="hole" style="bottom: 8px; left: 8px;"></div>
+                    <div class="hole" style="bottom: 8px; right: 8px;"></div>
+                </div>
+                <div class="oled-pins">
+                    <div class="oled-pin"></div><div class="oled-pin"></div><div class="oled-pin"></div><div class="oled-pin"></div>
+                </div>
+                <div class="text-[8px] text-white/80 font-mono tracking-widest mb-1">GND VCC SCL SDA</div>
+                <div class="oled-screen-frame">
+                    <div class="oled-glass" id="mockupScreen"></div>
+                </div>
+                <div class="mt-auto mb-2 text-[8px] text-white/30 font-mono">SSD1306 128x64</div>
+            </div>
+            <button onclick="closeModal('mockupModal')" class="mt-8 px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors border border-white/20">Close Preview</button>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal-bg fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="modal-content w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-white font-semibold flex items-center gap-2"><i data-lucide="file-code-2" class="w-4 h-4"></i> Import Bitmap Object</h3>
+                <button onclick="closeModal('importModal')" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 flex-1 overflow-auto">
+                <p class="text-gray-400 text-xs mb-2">Paste your C array or Python byte string.</p>
+                <textarea id="importInput" class="w-full h-64 bg-black/50 border border-white/10 rounded-lg p-3 text-xs font-mono text-gray-300 focus:border-white/30 focus:outline-none resize-none" placeholder="// Paste code here..."></textarea>
+            </div>
+            <div class="p-4 border-t border-white/10 bg-white/5 flex justify-end gap-3">
+                <button onclick="closeModal('importModal')" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+                <button onclick="importCode(false)" class="px-4 py-2 rounded-lg text-sm bg-white text-black font-semibold hover:bg-gray-200 transition-colors">Import & Place</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference Modal -->
+    <div id="referenceModal" class="modal-bg fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="modal-content w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-white font-semibold flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4"></i> Load Reference Layer</h3>
+                <button onclick="closeModal('referenceModal')" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 flex-1 overflow-auto">
+                <p class="text-gray-400 text-xs mb-2">Paste code here to display it faintly <b>under</b> your canvas.</p>
+                <textarea id="referenceInput" class="w-full h-64 bg-black/50 border border-white/10 rounded-lg p-3 text-xs font-mono text-gray-300 focus:border-white/30 focus:outline-none resize-none" placeholder="// Paste reference code..."></textarea>
+            </div>
+            <div class="p-4 border-t border-white/10 bg-white/5 flex justify-between items-center">
+                <button onclick="clearReference()" class="text-xs text-red-400 hover:text-red-300">Clear Reference</button>
+                <div class="flex gap-3">
+                    <button onclick="closeModal('referenceModal')" class="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+                    <button onclick="importCode(true)" class="px-4 py-2 rounded-lg text-sm bg-white text-black font-semibold hover:bg-gray-200 transition-colors">Load Background</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Library Modal -->
+    <div id="libraryModal" class="modal-bg fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="modal-content w-full max-w-3xl bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[80vh]">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <h3 class="text-white font-semibold flex items-center gap-2"><i data-lucide="library" class="w-4 h-4"></i> Icon Library</h3>
+                <button onclick="closeModal('libraryModal')" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-4 border-b border-white/10 flex gap-4 bg-[#0f0f0f]">
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-500"></i>
+                    <input type="text" id="iconSearch" placeholder="Search icons..." class="w-full bg-black/50 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none">
+                </div>
+                <div class="flex items-center gap-2 text-xs text-gray-400">
+                    <span>Size:</span>
+                    <select id="iconSize" class="bg-black/50 border border-white/10 rounded-lg px-2 py-2 text-white focus:outline-none">
+                        <option value="16">16px</option>
+                        <option value="24" selected>24px</option>
+                        <option value="32">32px</option>
+                        <option value="48">48px</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4 custom-scrollbar bg-[#050505]">
+                <div id="iconGrid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 bg-white text-black px-4 py-2 rounded shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2 font-medium text-sm">
+        <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
+        <span>Action Successful</span>
+    </div>
+
+    <script>
+        const config = { width: 128, height: 64, pixelScale: 10, gridColor: '#262626', pixelOnColor: '#ffffff', pixelOffColor: '#1a1a1a', highlightColor: '#00eaff' };
+        let currentTool = 'pencil';
+        let isDrawing = false, isCreatingObject = false;
+        let pixelData = [], referencePixels = [], history = [];
+        let startPos = { x: 0, y: 0 };
+        let activeObject = null, isDraggingObject = false, isResizingObject = false, dragOffset = { x: 0, y: 0 }, resizeHandle = null;
+
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const coordsDisplay = document.getElementById('coords');
+        const shiftIndicator = document.getElementById('shiftIndicator');
+        const fillCheckbox = document.getElementById('fillToggle');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const objModeIndicator = document.getElementById('objectModeIndicator');
+        const objControls = document.getElementById('objectControls');
+        const mockupBtn = document.getElementById('mockupBtn');
+        
+        function init() {
+            lucide.createIcons();
+            config.width = parseInt(document.getElementById('canvasWidth').value) || 128;
+            config.height = parseInt(document.getElementById('canvasHeight').value) || 64;
+            config.pixelScale = parseInt(zoomSlider.value) || 10;
+            pixelData = new Array(config.width * config.height).fill(0);
+            saveHistory();
+            updateCanvasDimensions();
+            setupEventListeners();
+            updateCodeOutput();
+            loadLibraryIcons();
+            checkMockupAvailability();
+        }
+
+        function updateCanvasDimensions() {
+            canvas.width = config.width * config.pixelScale;
+            canvas.height = config.height * config.pixelScale;
+            canvas.style.width = `${config.width * config.pixelScale}px`;
+            canvas.style.height = `${config.height * config.pixelScale}px`;
+            render();
+            checkMockupAvailability();
+        }
+
+        function checkMockupAvailability() {
+            if(config.width === 128 && config.height === 64) mockupBtn.classList.remove('hidden');
+            else mockupBtn.classList.add('hidden');
+        }
+
+        function handleResizeBtn() {
+            const wInput = parseInt(document.getElementById('canvasWidth').value), hInput = parseInt(document.getElementById('canvasHeight').value);
+            if (wInput && hInput) {
+                config.width = wInput; config.height = hInput;
+                pixelData = new Array(config.width * config.height).fill(0);
+                referencePixels = []; 
+                saveHistory();
+                updateCanvasDimensions();
+                updateCodeOutput();
+            }
+        }
+
+        function handleZoom() {
+            config.pixelScale = parseInt(zoomSlider.value);
+            updateCanvasDimensions();
+        }
+
+        function render() {
+            ctx.fillStyle = config.pixelOffColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Reference Layer
+            if (referencePixels.length === pixelData.length) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                for (let i = 0; i < referencePixels.length; i++) {
+                    if (referencePixels[i] === 1) ctx.fillRect((i % config.width) * config.pixelScale, Math.floor(i / config.width) * config.pixelScale, config.pixelScale, config.pixelScale);
+                }
+            }
+
+            ctx.strokeStyle = config.gridColor; ctx.lineWidth = 1; ctx.beginPath();
+            for (let x = 0; x <= config.width; x++) { ctx.moveTo(x * config.pixelScale, 0); ctx.lineTo(x * config.pixelScale, canvas.height); }
+            for (let y = 0; y <= config.height; y++) { ctx.moveTo(0, y * config.pixelScale); ctx.lineTo(canvas.width, y * config.pixelScale); }
+            ctx.stroke();
+
+            ctx.fillStyle = config.pixelOnColor;
+            for (let i = 0; i < pixelData.length; i++) {
+                if (pixelData[i] === 1) ctx.fillRect((i % config.width) * config.pixelScale + 1, Math.floor(i / config.width) * config.pixelScale + 1, config.pixelScale - 2, config.pixelScale - 2);
+            }
+
+            if (activeObject) {
+                objModeIndicator.classList.remove('hidden'); objControls.classList.remove('hidden');
+                ctx.fillStyle = config.pixelOnColor;
+                for (let y = 0; y < activeObject.h; y++) {
+                    for (let x = 0; x < activeObject.w; x++) {
+                        if (activeObject.pixels[y * activeObject.w + x] === 1) {
+                            const cx = activeObject.x + x, cy = activeObject.y + y;
+                            if (cx >= 0 && cx < config.width && cy >= 0 && cy < config.height) {
+                                ctx.globalAlpha = 0.8; ctx.fillRect(cx * config.pixelScale + 1, cy * config.pixelScale + 1, config.pixelScale - 2, config.pixelScale - 2); ctx.globalAlpha = 1.0;
+                            }
+                        }
+                    }
+                }
+                if (!isDrawing) {
+                    const bx = activeObject.x * config.pixelScale, by = activeObject.y * config.pixelScale, bw = activeObject.w * config.pixelScale, bh = activeObject.h * config.pixelScale;
+                    ctx.strokeStyle = config.highlightColor; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.strokeRect(bx, by, bw, bh); ctx.setLineDash([]);
+                    ctx.fillStyle = config.highlightColor; ctx.fillRect(bx + bw - 4, by + bh - 4, 8, 8);
+                }
+            } else {
+                objModeIndicator.classList.add('hidden'); objControls.classList.add('hidden');
+            }
+        }
+
+        function getMousePos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: Math.floor((evt.clientX - rect.left) / config.pixelScale), y: Math.floor((evt.clientY - rect.top) / config.pixelScale), rawX: evt.clientX - rect.left, rawY: evt.clientY - rect.top };
+        }
+
+        function handleStart(e) {
+            const pos = getMousePos(e);
+            if (activeObject && !['pencil', 'eraser', 'bucket'].includes(currentTool)) {
+                const bx = activeObject.x * config.pixelScale, by = activeObject.y * config.pixelScale, bw = activeObject.w * config.pixelScale, bh = activeObject.h * config.pixelScale;
+                if (Math.abs(pos.rawX - (bx + bw)) < 10 && Math.abs(pos.rawY - (by + bh)) < 10) { isResizingObject = true; resizeHandle = 'se'; return; }
+                if (pos.x >= activeObject.x && pos.x < activeObject.x + activeObject.w && pos.y >= activeObject.y && pos.y < activeObject.y + activeObject.h) { isDraggingObject = true; dragOffset = { x: pos.x - activeObject.x, y: pos.y - activeObject.y }; return; }
+                commitActiveObject();
+            }
+            if (!isDraggingObject && !isResizingObject) {
+                isDrawing = true; startPos = pos;
+                if (['pencil', 'eraser', 'bucket'].includes(currentTool)) saveHistory(); else activeObject = null;
+                if (currentTool === 'pencil') { setPixel(pos.x, pos.y, 1); render(); }
+                else if (currentTool === 'eraser') { setPixel(pos.x, pos.y, 0); render(); }
+                else if (currentTool === 'bucket') { floodFill(pos.x, pos.y, 1); render(); updateCodeOutput(); }
+            }
+        }
+
+        function handleMove(e) {
+            const pos = getMousePos(e);
+            coordsDisplay.textContent = `X: ${Math.max(0, Math.min(pos.x, config.width-1))} Y: ${Math.max(0, Math.min(pos.y, config.height-1))}`;
+            if (e.shiftKey) shiftIndicator.classList.remove('hidden'); else shiftIndicator.classList.add('hidden');
+
+            if (activeObject) {
+                if (isDraggingObject) {
+                    activeObject.x = Math.max(0, Math.min(pos.x - dragOffset.x, config.width - activeObject.w));
+                    activeObject.y = Math.max(0, Math.min(pos.y - dragOffset.y, config.height - activeObject.h));
+                    render(); return;
+                }
+                if (isResizingObject && resizeHandle === 'se') {
+                    let newW = Math.max(1, pos.x - activeObject.x + 1), newH = Math.max(1, pos.y - activeObject.y + 1);
+                    if (e.shiftKey && activeObject.origW > 0 && activeObject.origH > 0) {
+                        const ar = activeObject.origW / activeObject.origH;
+                        if (Math.abs(newW - activeObject.w) > Math.abs(newH - activeObject.h)) newH = Math.round(newW / ar); else newW = Math.round(newH * ar);
+                    }
+                    resizeActiveObjectPixels(Math.max(1, newW), Math.max(1, newH)); render(); return;
+                }
+            }
+
+            if (!isDrawing) return;
+            let targetX = pos.x, targetY = pos.y;
+            const isShape = ['line', 'rect', 'circle', 'triangle'].includes(currentTool);
+
+            if (e.shiftKey && isShape) {
+                const dx = targetX - startPos.x, dy = targetY - startPos.y;
+                if (currentTool === 'line') {
+                    if (Math.abs(dx) > Math.abs(dy) * 2) targetY = startPos.y;
+                    else if (Math.abs(dy) > Math.abs(dx) * 2) targetX = startPos.x;
+                    else { const d = Math.max(Math.abs(dx), Math.abs(dy)); targetX = startPos.x + (dx > 0 ? d : -d); targetY = startPos.y + (dy > 0 ? d : -d); }
+                } else {
+                    const d = Math.max(Math.abs(dx), Math.abs(dy)); targetX = startPos.x + (dx >= 0 ? d : -d); targetY = startPos.y + (dy >= 0 ? d : -d);
+                }
+            }
+            targetX = Math.max(0, Math.min(targetX, config.width - 1)); targetY = Math.max(0, Math.min(targetY, config.height - 1));
+
+            if (isShape) { activeObject = generateShapeObject(startPos, {x: targetX, y: targetY}, currentTool, fillCheckbox.checked); render(); return; }
+            if (currentTool === 'pencil') { drawLine(startPos.x, startPos.y, targetX, targetY, 1); startPos = {x: targetX, y: targetY}; render(); }
+            else if (currentTool === 'eraser') { drawLine(startPos.x, startPos.y, targetX, targetY, 0); startPos = {x: targetX, y: targetY}; render(); }
+        }
+
+        function handleEnd(e) {
+            isDraggingObject = false; isResizingObject = false;
+            if (isDrawing) {
+                isDrawing = false;
+                if (['rect', 'circle', 'triangle', 'line'].includes(currentTool)) {
+                    if (activeObject && (activeObject.w < 1 || activeObject.h < 1)) { activeObject = null; render(); }
+                } else updateCodeOutput();
+            }
+        }
+
+        function generateShapeObject(start, end, tool, fill) {
+            let x = Math.min(start.x, end.x), y = Math.min(start.y, end.y);
+            let w = Math.abs(end.x - start.x) + 1, h = Math.abs(end.y - start.y) + 1;
+            const temp = new Array(w * h).fill(0);
+            const set = (bx, by, v) => { if (bx >= 0 && bx < w && by >= 0 && by < h) temp[by * w + bx] = v; };
+            const ls = { x: start.x - x, y: start.y - y }, le = { x: end.x - x, y: end.y - y };
+
+            if (tool === 'rect') drawRectBuf(ls.x, ls.y, le.x, le.y, 1, fill, set);
+            else if (tool === 'line') drawLineBuf(ls.x, ls.y, le.x, le.y, 1, set);
+            else if (tool === 'circle') drawCircleBuf(ls.x, ls.y, le.x, le.y, 1, fill, set);
+            else if (tool === 'triangle') drawTriangleBuf(ls.x, ls.y, le.x, le.y, 1, fill, set);
+            
+            return { x, y, w, h, pixels: temp, originalPixels: [...temp], origW: w, origH: h, type: tool, fill };
+        }
+
+        function commitActiveObject() {
+            if (!activeObject) return;
+            saveHistory();
+            for (let y = 0; y < activeObject.h; y++) {
+                for (let x = 0; x < activeObject.w; x++) {
+                    if (activeObject.pixels[y * activeObject.w + x] === 1) setPixel(activeObject.x + x, activeObject.y + y, 1);
+                }
+            }
+            activeObject = null; render(); updateCodeOutput(); showToast("Object Created");
+        }
+
+        function rotateActiveObject() {
+            if (!activeObject) return;
+            const newW = activeObject.h, newH = activeObject.w, newP = new Array(newW * newH).fill(0);
+            for (let y = 0; y < activeObject.h; y++) {
+                for (let x = 0; x < activeObject.w; x++) {
+                    newP[x * newW + (activeObject.h - 1 - y)] = activeObject.pixels[y * activeObject.w + x];
+                }
+            }
+            activeObject.pixels = newP; activeObject.w = newW; activeObject.h = newH;
+            if (activeObject.type === 'bitmap') { activeObject.originalPixels = [...newP]; activeObject.origW = newW; activeObject.origH = newH; }
+            else regenerateActiveObjectPixels();
+            render();
+        }
+
+        function resizeActiveObjectPixels(nw, nh) {
+            if (!activeObject) return;
+            const newP = new Array(nw * nh).fill(0), xr = activeObject.origW / nw, yr = activeObject.origH / nh;
+            for (let y = 0; y < nh; y++) {
+                for (let x = 0; x < nw; x++) {
+                    const sx = Math.floor(x * xr), sy = Math.floor(y * yr);
+                    if (sx < activeObject.origW && sy < activeObject.origH) newP[y * nw + x] = activeObject.originalPixels[sy * activeObject.origW + sx];
+                }
+            }
+            activeObject.pixels = newP; activeObject.w = nw; activeObject.h = nh;
+        }
+
+        function regenerateActiveObjectPixels() {
+            if (!activeObject || activeObject.type === 'bitmap') return;
+            activeObject.pixels = new Array(activeObject.w * activeObject.h).fill(0);
+            const set = (bx, by, v) => { if (bx >= 0 && bx < activeObject.w && by >= 0 && by < activeObject.h) activeObject.pixels[by * activeObject.w + bx] = v; };
+            if (activeObject.type === 'line') drawLineBuf(0, 0, activeObject.w-1, activeObject.h-1, 1, set);
+            else if (activeObject.type === 'rect') drawRectBuf(0, 0, activeObject.w-1, activeObject.h-1, 1, activeObject.fill, set);
+            else if (activeObject.type === 'circle') drawCircleBuf(0, 0, activeObject.w-1, activeObject.h-1, 1, activeObject.fill, set);
+            else if (activeObject.type === 'triangle') drawTriangleBuf(0, 0, activeObject.w-1, activeObject.h-1, 1, activeObject.fill, set);
+        }
+
+        function drawLineBuf(x0, y0, x1, y1, val, set) {
+            let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1, err = dx - dy;
+            while (true) { set(x0, y0, val); if (x0 === x1 && y0 === y1) break; let e2 = 2 * err; if (e2 > -dy) { err -= dy; x0 += sx; } if (e2 < dx) { err += dx; y0 += sy; } }
+        }
+        function drawRectBuf(x0, y0, x1, y1, val, fill, set) {
+            const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), b = Math.max(y0, y1);
+            for (let y = t; y <= b; y++) for (let x = l; x <= r; x++) if (fill || x===l || x===r || y===t || y===b) set(x, y, val);
+        }
+        function drawCircleBuf(x0, y0, x1, y1, val, fill, set) {
+            const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), b = Math.max(y0, y1);
+            const rad = Math.floor((Math.min(r - l, b - t)) / 2); // Adjusted radius
+            const cx = l + Math.floor((r - l) / 2), cy = t + Math.floor((b - t) / 2);
+            if (fill) {
+                for (let y = t; y <= b; y++) for (let x = l; x <= r; x++) if ((x-cx)**2 + (y-cy)**2 <= rad**2) set(x, y, val);
+            } else {
+                let x = rad, y = 0, P = 1 - rad;
+                while (x >= y) {
+                    set(cx+x, cy+y, val); set(cx-x, cy+y, val); set(cx+x, cy-y, val); set(cx-x, cy-y, val);
+                    set(cx+y, cy+x, val); set(cx-y, cy+x, val); set(cx+y, cy-x, val); set(cx-y, cy-x, val);
+                    y++; if (P <= 0) P += 2*y + 1; else { x--; P += 2*y - 2*x + 1; }
+                }
+            }
+        }
+        function drawTriangleBuf(x0, y0, x1, y1, val, fill, set) {
+            const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), b = Math.max(y0, y1);
+            const v1 = {x: Math.floor((l+r)/2), y: t}, v2 = {x: l, y: b}, v3 = {x: r, y: b};
+            drawLineBuf(v1.x, v1.y, v2.x, v2.y, val, set); drawLineBuf(v2.x, v2.y, v3.x, v3.y, val, set); drawLineBuf(v3.x, v3.y, v1.x, v1.y, val, set);
+        }
+
+        function setPixel(x, y, val) { if (x >= 0 && x < config.width && y >= 0 && y < config.height) pixelData[y * config.width + x] = val; }
+        function getPixel(x, y) { if (x < 0 || x >= config.width || y < 0 || y >= config.height) return 0; return pixelData[y * config.width + x]; }
+        function drawLine(x0, y0, x1, y1, val) { drawLineBuf(x0, y0, x1, y1, val, setPixel); }
+        
+        function floodFill(startX, startY, newVal) {
+            const oldVal = getPixel(startX, startY);
+            if (oldVal === newVal) return;
+            const stack = [[startX, startY]];
+            while (stack.length) {
+                const [x, y] = stack.pop();
+                if (x >= 0 && x < config.width && y >= 0 && y < config.height && getPixel(x, y) === oldVal) {
+                    setPixel(x, y, newVal);
+                    if(x+1 < config.width && getPixel(x+1, y) === oldVal) stack.push([x + 1, y]);
+                    if(x-1 >= 0 && getPixel(x-1, y) === oldVal) stack.push([x - 1, y]);
+                    if(y+1 < config.height && getPixel(x, y+1) === oldVal) stack.push([x, y + 1]);
+                    if(y-1 >= 0 && getPixel(x, y-1) === oldVal) stack.push([x, y - 1]);
+                }
+            }
+        }
+
+        function saveHistory() { if (history.length > 20) history.shift(); history.push([...pixelData]); }
+        function undo() { if (activeObject) { activeObject = null; render(); return; } if (history.length > 0) { pixelData = history.pop(); render(); updateCodeOutput(); } }
+        function clearCanvas() { saveHistory(); pixelData.fill(0); activeObject = null; render(); updateCodeOutput(); }
+        function invertCanvas() { saveHistory(); pixelData = pixelData.map(p => 1-p); render(); updateCodeOutput(); }
+        function clearReference() { referencePixels = []; render(); showToast("Reference layer cleared"); }
+        function openModal(id) { 
+            if (id === 'mockupModal') {
+                const ms = document.getElementById('mockupScreen'); ms.innerHTML = '';
+                const c = document.createElement('canvas'); c.width = 128; c.height = 64; 
+                const cx = c.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0,0,128,64); cx.fillStyle = '#fff';
+                for(let i=0; i<pixelData.length; i++) if(pixelData[i]) cx.fillRect(i%128, Math.floor(i/128), 1, 1);
+                c.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;'; ms.appendChild(c);
+            }
+            document.getElementById(id).classList.add('open'); 
+        }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        function showToast(msg, type='success') { const t = document.getElementById('toast'); t.querySelector('span').textContent = msg; t.classList.remove('translate-y-20', 'opacity-0'); setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 3000); }
+        async function copyCode(id) { 
+            try { await navigator.clipboard.writeText(document.getElementById(id).textContent); showToast("Copied!"); } 
+            catch { const t = document.createElement('textarea'); t.value = document.getElementById(id).textContent; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); showToast("Copied!"); } 
+        }
+        function updateCodeOutput() {
+            let hex = "", ard = `const unsigned char myBitmap[] PROGMEM = {\n`;
+            const bpr = Math.ceil(config.width/8);
+            for (let y=0; y<config.height; y++) {
+                ard += '  ';
+                for (let b=0; b<bpr; b++) {
+                    let v = 0; for (let i=0; i<8; i++) if (getPixel(b*8+i, y)) v |= (0x80 >> i);
+                    ard += '0x' + v.toString(16).padStart(2,'0').toUpperCase() + ', ';
+                    hex += '\\x' + v.toString(16).padStart(2,'0');
+                }
+                ard += '\n';
+            }
+            document.getElementById('arduinoCode').textContent = `// ${config.width}x${config.height}\n` + ard + '};';
+            document.getElementById('pythonCode').textContent = `import framebuf\nbuf = bytearray(b'${hex}')\nfb = framebuf.FrameBuffer(buf, ${config.width}, ${config.height}, framebuf.MONO_HLSB)`;
+        }
+        function discardActiveObject() { activeObject = null; render(); }
+        function rotateActiveObject() { rotateActiveObject(); } // Fixed binding above
+        
+        function loadLibraryIcons() {
+            const g = document.getElementById('iconGrid'); Object.keys(lucide.icons).forEach(n => {
+                const d = document.createElement('div'); d.className = "aspect-square bg-white/5 border border-white/10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 p-2";
+                d.onclick = () => stampIcon(n); d.innerHTML = `<i data-lucide="${n}" class="w-6 h-6 text-gray-400 mb-1"></i><span class="text-[10px] text-gray-500 truncate w-full text-center">${n}</span>`; d.dataset.name = n; g.appendChild(d);
+            }); lucide.createIcons();
+        }
+        function stampIcon(n) {
+            const s = parseInt(document.getElementById('iconSize').value);
+            const i = new Image();
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${lucide.icons[n].map(c => `<${c[0]} ${Object.entries(c[1]).map(e=>`${e[0]}="${e[1]}"`).join(' ')}/>`).join('')}</svg>`;
+            i.onload = () => {
+                const c = document.createElement('canvas'); c.width = s; c.height = s; c.getContext('2d').drawImage(i, 0, 0);
+                const d = c.getContext('2d').getImageData(0,0,s,s).data, p = new Array(s*s).fill(0);
+                for(let j=0; j<p.length; j++) if(d[j*4+3]>50) p[j]=1;
+                activeObject = { x: Math.floor((config.width-s)/2), y: Math.floor((config.height-s)/2), w: s, h: s, pixels: p, originalPixels: [...p], origW: s, origH: s, type: 'bitmap' };
+                closeModal('libraryModal'); render(); showToast("Icon loaded");
+            };
+            i.src = 'data:image/svg+xml;base64,' + btoa(svg);
+        }
+        function importCode(ref) {
+            const val = document.getElementById(ref ? 'referenceInput' : 'importInput').value;
+            const m = val.match(/(0x[0-9A-Fa-f]{1,2})|(\\x[0-9A-Fa-f]{2})/g);
+            if (!m) { showToast("No hex found", 'error'); return; }
+            const w = config.width, h = config.height, p = new Array(w*h).fill(0), bpr = Math.ceil(w/8);
+            let idx = 0;
+            for(let y=0; y<h; y++) {
+                for(let b=0; b<bpr; b++) {
+                    if(idx>=m.length) break;
+                    let v = parseInt(m[idx++].replace('\\x','0x'), 16);
+                    for(let i=0; i<8; i++) if((v >> (7-i)) & 1) if((b*8+i)<w) p[y*w + b*8+i] = 1;
+                }
+            }
+            if(ref) { referencePixels = p; closeModal('referenceModal'); showToast("Reference loaded"); }
+            else { if(activeObject) commitActiveObject(); activeObject = { x:0, y:0, w, h, pixels: p, originalPixels: [...p], origW: w, origH: h, type: 'bitmap' }; closeModal('importModal'); showToast("Imported"); }
+            render();
+        }
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            document.getElementById('resizeBtn').addEventListener('click', handleResizeBtn);
+            zoomSlider.addEventListener('input', handleZoom);
+
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Commit any active object before switching tools if it's a destructive tool
+                    if(activeObject && ['pencil', 'eraser', 'bucket'].includes(btn.dataset.tool)) commitActiveObject();
+                    
+                    document.querySelectorAll('.tool-btn').forEach(b => {
+                         b.classList.remove('active', 'text-white', 'bg-white/20', 'border-white/40');
+                         b.classList.add('border-transparent');
+                    });
+                    btn.classList.add('active');
+                    currentTool = btn.dataset.tool;
+                    
+                    // If switching to a shape tool, clear existing active object for fresh start
+                    if (['line', 'rect', 'circle', 'triangle'].includes(currentTool)) {
+                        activeObject = null;
+                        render();
+                    }
+                });
+            });
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabName = btn.dataset.tab;
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('text-oled-on', 'border-oled-on');
+                        b.classList.add('text-gray-400', 'border-transparent');
+                    });
+                    btn.classList.remove('text-gray-400', 'border-transparent');
+                    btn.classList.add('text-oled-on', 'border-oled-on');
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+                });
+            });
+
+            canvas.addEventListener('mousedown', (e) => handleStart(e));
+            canvas.addEventListener('mousemove', (e) => handleMove(e));
+            window.addEventListener('mouseup', (e) => handleEnd(e));
+            
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+                if (e.key === 'Shift') shiftIndicator.classList.remove('hidden');
+                
+                // Active Object Hotkeys
+                if (activeObject) {
+                    if (e.key === 'Enter') commitActiveObject();
+                    if (e.key === 'Escape') discardActiveObject();
+                    if (e.key === 'r' || e.key === 'R') rotateActiveObject();
+                    if (e.key === 'ArrowRight') { activeObject.x = Math.min(activeObject.x + 1, config.width - activeObject.w); render(); e.preventDefault(); }
+                    if (e.key === 'ArrowLeft') { activeObject.x = Math.max(activeObject.x - 1, 0); render(); e.preventDefault(); }
+                    if (e.key === 'ArrowUp') { activeObject.y = Math.max(activeObject.y - 1, 0); render(); e.preventDefault(); }
+                    if (e.key === 'ArrowDown') { activeObject.y = Math.min(activeObject.y + 1, config.height - activeObject.h); render(); e.preventDefault(); }
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'Shift') shiftIndicator.classList.add('hidden');
+            });
+
+            document.getElementById('iconSearch').addEventListener('input', (e) => filterIcons(e.target.value.toLowerCase()));
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
